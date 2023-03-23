@@ -1,0 +1,798 @@
+/***********************************************
+ *   All loops in C, for UNIX...               *
+ *                                             *
+ * Skal 97.                                    *
+ ***********************************************/
+
+#include "main3d.h"
+#include "bump.h"
+
+/******************************************************************/
+
+#ifdef UNIX 
+
+EXTERN void _Draw_Flat_16( )
+{
+   USHORT *Dst;
+   INT y, dy;
+
+   y = Scan_Start;
+   Dst = ((USHORT *)_RCst_.Base_Ptr) + (y+1)*(_RCst_.Pix_BpS/2);
+   dy = Scan_H;
+   while( dy>0 )
+   {
+      USHORT *Ptr;
+      INT Len;
+
+      Len = Scan_Pt1[y];
+      Ptr = Dst - Len;
+      Len = Len - Scan_Pt2[y];
+      while( Len<0 )
+      {
+         Ptr[Len] = Flat_Color&0xffff;
+         Len++;
+      }
+      (BYTE*)Dst += _RCst_.Pix_BpS;
+      y++;
+      dy--;
+   }
+}
+
+EXTERN void _Draw_Flat2_16( )
+{
+   USHORT *Dst;
+   INT y, dy;
+
+   y = Scan_Start;
+   Dst = ((USHORT *)_RCst_.Base_Ptr) + (y+1)*(_RCst_.Pix_BpS/2);
+   dy = Scan_H;
+   while( dy>0 )
+   {
+      USHORT *Ptr;
+      INT Len;
+
+      Len = Scan_Pt1[y];
+      Ptr = Dst - Len;
+      Len = Len - Scan_Pt2[y];
+      while( Len<0 )
+      {
+         Ptr[Len] = Flat_Color;
+         Len++;
+      }
+      (BYTE*)Dst += _RCst_.Pix_BpS;
+      y++;
+      dy--;
+   }
+}
+
+#endif      // UNIX
+
+/******************************************************************/
+
+#ifdef UNIX
+
+EXTERN void _Draw_Gouraud_16( )
+{
+   INT y, dy;
+   USHORT *Dst;
+
+   y = Scan_Start;
+   Dst = ((USHORT*)_RCst_.Base_Ptr) + (y+1)*(_RCst_.Pix_BpS/2);
+   dy = Scan_H;
+   while( dy>0 )   
+   {
+      INT Len;
+      INT S;
+      USHORT *Ptr;
+
+      Len = Scan_Pt1[y];
+      Ptr = Dst - Len;
+      Len = Len - Scan_Pt2[y];
+
+      S = Scan_S[y];
+      while( Len<0 )
+      {
+         Ptr[Len] = (Ptr[Len]&0xFF00) | (PIXEL)( S>>16 );
+         S -= dyS;
+         Len++;
+      }
+      Dst += (_RCst_.Pix_BpS/2);
+      ++y;
+      dy--;
+   }
+}
+
+EXTERN void _Draw_Gouraud_Ramp_16( )
+{
+   INT y, dy;
+   USHORT *Dst;
+
+   y = Scan_Start;
+   Dst = ((USHORT*)_RCst_.Base_Ptr) + (y+1)*(_RCst_.Pix_BpS/2);
+   dy = Scan_H;
+
+   while( dy>0 )   
+   {
+      INT Len;
+      INT S;
+      USHORT *Ptr;
+
+      Len = Scan_Pt1[y];
+      Ptr = Dst - Len;
+      Len = Len - Scan_Pt2[y];
+      S = Scan_S[y]>>16;
+      while( Len<0 )
+      {
+         Ptr[Len] = (Ptr[Len]&0xFF00)|(PIXEL)( S );
+         Len++;
+      }
+      (BYTE*)Dst += _RCst_.Pix_BpS;
+      ++y;
+      dy--;
+   }
+}
+#endif
+
+
+/******************************************************************/
+/******************************************************************/
+
+#ifdef UNIX
+EXTERN void _Draw_UV_16b( )
+{
+   INT y, dy;
+   USHORT *Dst;
+
+      /* Now, draw! Here lies the Mythical Inner-Loop :) */
+
+   y = Scan_Start;
+   Dst = ((USHORT *)_RCst_.Base_Ptr) + (y+1)*(_RCst_.Pix_BpS/2);
+   dy = Scan_H;
+   while( dy>0 )   
+   {
+      INT Len;
+      INT U, V;
+      USHORT *Ptr;
+
+      Len = Scan_Pt1[y];
+      Ptr = Dst - Len;
+      Len = Len - Scan_Pt2[y];
+
+      U = Scan_U[y];
+      V = Scan_V[y];
+      while( Len<0 )
+      {
+         USHORT Off = ( (U>>16)&0x00FF ) | ( (V>>8)&0xFF00 );
+         Ptr[Len++] = ((USHORT*)UV_Src)[ Off ]; // <= *NO* Mip_Mask HERE!!
+         U -= dyU; V -= dyV;
+      }
+      (BYTE*)Dst += _RCst_.Pix_BpS;
+      ++y;
+      dy--;
+   }
+}
+#endif
+
+/******************************************************************/
+/******************************************************************/
+
+#ifdef UNIX
+EXTERN void _Draw_UVc_16( )
+{
+   INT y, dy;
+   USHORT *Dst;
+
+      /* Now, draw! Here lies the Mythical Inner-Loop :) */
+
+   y = Scan_Start;
+   Dst = ((USHORT *)_RCst_.Base_Ptr) + (y+1)*(_RCst_.Pix_BpS/2);
+   dy = Scan_H;
+   while( dy>0 )   
+   {
+      USHORT *Ptr;
+      INT Len;
+      FLT uiz, viz, iz, z;
+      INT dU, dV;
+      INT U, V;
+
+      Len = Scan_Pt1[y];
+      Ptr = Dst - Len;
+      Len = Len - Scan_Pt2[y];
+      if ( Len>=0 ) goto Skip;
+
+      uiz = Scan_UiZ[y];
+      viz = Scan_ViZ[y];
+      iz  = Scan_iZ[y];
+      z = 1.0f/iz;
+      U = (INT)floor(uiz*z); V = (INT)floor(viz*z);
+      iz  += Len*DyiZ;
+      uiz += Len*DyU;
+      viz += Len*DyV;
+      z = 1.0f/iz;
+      dU = (INT)floor(uiz*z); dV = (INT)floor(viz*z);
+      z = 1.0f/Len;
+      dU = (U-dU)*z; dV = (V-dV)*z;
+      while( Len<0 )
+      {
+         USHORT Off = ( (U>>16)&0x00FF ) | ( (V>>8)&0xFF00 );
+         Ptr[Len++] = ((USHORT*)UV_Src)[ Off&Mip_Mask ];
+         U += dU; V += dV;
+      }
+Skip:
+      (BYTE*)Dst += _RCst_.Pix_BpS;
+      y++;
+      dy--;
+   }
+}
+#endif
+
+/******************************************************************/
+/******************************************************************/
+
+#ifdef UNIX 
+#define FUNC _Draw_UVc_64_16
+#define LOG2_PIX_PER_SPAN 6
+#define DIV_TAB _Div_Tab_64_
+#include "./loops216.h"
+
+#define FUNC _Draw_UVc_32_16
+#define LOG2_PIX_PER_SPAN 5
+#define DIV_TAB _Div_Tab_32_
+#include "./loops216.h"
+
+#define FUNC _Draw_UVc_16_16
+#define LOG2_PIX_PER_SPAN 4
+#define DIV_TAB _Div_Tab_16_
+#include "./loops216.h"
+
+#define FUNC _Draw_UVc_8_16
+#define LOG2_PIX_PER_SPAN 3
+#define DIV_TAB _Div_Tab_8_
+#include "./loops216.h"
+
+#define FUNC _Draw_UVc_4_16
+#define LOG2_PIX_PER_SPAN 2
+#define DIV_TAB _Div_Tab_4_
+#include "./loops216.h"
+EXTERN void _Draw_UVc_64_16( )
+{
+   INT y, dy;
+   USHORT *Dst;
+
+   y = Scan_Start;
+   Dst = ((USHORT *)_RCst_.Base_Ptr) + (y+1)*(_RCst_.Pix_BpS/2);
+   dy = Scan_H;
+   DyU *= 64.0; DyV *= 64.0; DyiZ *= 64.0;
+   while( dy>0 )   
+   {
+      INT Len, Left_Over;
+      FLT uiz, viz, iz, z;
+      INT U, V;
+      USHORT *Ptr;
+
+      iz  = Scan_iZ[y]; z = 1.0/iz;
+
+      Len = Scan_Pt2[y];
+      Ptr = Dst - Len;
+      Len = Len - Scan_Pt1[y];
+      if ( Len<=0 ) goto Skip;
+      Left_Over = (Len)&0x3F;
+      Len = Len>>6;
+
+      uiz = Scan_UiZ[y]; U = (INT)( uiz*z );
+      viz = Scan_ViZ[y]; V = (INT)( viz*z );
+
+      if ( Len==0 )
+      {
+         uiz -= DyU*_Div_Tab_64_[Left_Over-1];
+         viz -= DyV*_Div_Tab_64_[Left_Over-1];
+         iz  -= DyiZ*_Div_Tab_64_[Left_Over-1];
+         z = 1.0/iz;
+         goto Finish_64;
+      }
+      iz -= DyiZ; uiz -= DyU; viz -= DyV;
+      z = 1.0/iz;
+
+      while( --Len>=0 )
+      {
+         INT Span;
+         INT U2, V2, dU, dV;
+
+         U2 = (INT)( uiz*z ); V2 = (INT)( viz*z );
+         dU = (U2-U)>>6; dV = (V2-V)>>6;
+         if ( Len )
+         {
+            uiz -= DyU; viz -= DyV; iz -= DyiZ;
+            z = 1.0/iz;
+         }
+         else if ( Left_Over )
+         {
+            uiz -= DyU*_Div_Tab_64_[Left_Over-1];
+            viz -= DyV*_Div_Tab_64_[Left_Over-1];
+            iz  -= DyiZ*_Div_Tab_64_[Left_Over-1];
+            z = 1.0/iz;
+         }
+         Span = -64; Ptr -= Span;
+         while( Span<0 )
+         {
+            USHORT Off = ( (U>>16)&0x00FF ) | ( (V>>8)&0xFF00 );
+            Ptr[Span++] = ((USHORT*)UV_Src)[ Off&Mip_Mask ];
+            U += dU; V += dV;
+         }
+         // U = U2; V = V2;
+      }
+
+Finish_64:
+      if ( Left_Over>0 )
+      {
+         INT dU, dV;
+         FLT U2, V2;
+         U2 = uiz*z; V2 = viz*z;
+         dU = (INT)( (U2-(FLT)U)*_Div_Tab_1_[Left_Over] );
+         dV = (INT)( (V2-(FLT)V)*_Div_Tab_1_[Left_Over] );
+         // dV = (V2-V)>>6;
+         while( --Left_Over>=0 )
+         {
+            USHORT Off = ( (U>>16)&0x00FF ) | ( (V>>8)&0xFF00 );
+            *Ptr++ = ((USHORT*)UV_Src)[ Off&Mip_Mask ];
+            U += dU; V += dV;
+         }
+      }
+Skip:
+      (BYTE*)Dst += _RCst_.Pix_BpS;
+      ++y;
+      dy--;
+   }
+}
+
+EXTERN void _Draw_UVc_32_16( )
+{
+   INT y, dy;
+   USHORT *Dst;
+
+   y = Scan_Start;
+   Dst = ((USHORT *)_RCst_.Base_Ptr) + (y+1)*(_RCst_.Pix_BpS/2);
+   dy = Scan_H;
+   DyU *= 32.0; DyV *= 32.0; DyiZ *= 32.0;
+   while( dy>0 )   
+   {
+      INT Len, Left_Over;
+      FLT uiz, viz, iz, z;
+      INT U, V;
+      USHORT *Ptr;
+
+      iz  = Scan_iZ[y]; z = 1.0/iz;
+
+      Len = Scan_Pt2[y];
+      Ptr = Dst - Len;
+      Len = Len - Scan_Pt1[y];
+      if ( Len<=0 ) goto Skip;
+      Left_Over = (Len)&0x1F;
+      Len = Len>>5;
+
+      uiz = Scan_UiZ[y]; U = (INT)( uiz*z );
+      viz = Scan_ViZ[y]; V = (INT)( viz*z );
+
+      if ( Len==0 )
+      {
+         uiz -= DyU*_Div_Tab_32_[Left_Over-1];
+         viz -= DyV*_Div_Tab_32_[Left_Over-1];
+         iz  -= DyiZ*_Div_Tab_32_[Left_Over-1];
+         z = 1.0/iz;
+         goto Finish_32;
+      }
+      iz -= DyiZ; uiz -= DyU; viz -= DyV;
+      z = 1.0/iz;
+
+      while( --Len>=0 )
+      {
+         INT Span;
+         INT U2, V2, dU, dV;
+
+         U2 = (INT)( uiz*z ); V2 = (INT)( viz*z );
+         dU = (U2-U)>>5; dV = (V2-V)>>5;
+         if ( Len )
+         {
+            uiz -= DyU; viz -= DyV; iz -= DyiZ;
+            z = 1.0/iz;
+         }
+         else if ( Left_Over )
+         {
+            uiz -= DyU*_Div_Tab_32_[Left_Over-1];
+            viz -= DyV*_Div_Tab_32_[Left_Over-1];
+            iz  -= DyiZ*_Div_Tab_32_[Left_Over-1];
+            z = 1.0/iz;
+         }
+         Span = -32; Ptr -= Span;
+         while( Span<0 )
+         {
+            USHORT Off = ( (U>>16)&0x00FF ) | ( (V>>8)&0xFF00 );
+            Ptr[Span++] = ((USHORT*)UV_Src)[ Off&Mip_Mask ];
+            U += dU; V += dV;
+         }
+         // U = U2; V = V2;
+      }
+
+Finish_32:
+      if ( Left_Over>0 )
+      {
+         INT dU, dV;
+         FLT U2, V2;
+         U2 = uiz*z; V2 = viz*z;
+         dU = (INT)( (U2-(FLT)U)*_Div_Tab_1_[Left_Over] );
+         dV = (INT)( (V2-(FLT)V)*_Div_Tab_1_[Left_Over] );
+         // dV = (V2-V)>>5;
+         while( --Left_Over>=0 )
+         {
+            USHORT Off = ( (U>>16)&0x00FF ) | ( (V>>8)&0xFF00 );
+            *Ptr++ = ((USHORT*)UV_Src)[ Off&Mip_Mask ];
+            U += dU; V += dV;
+         }
+      }
+Skip:
+      (BYTE*)Dst += _RCst_.Pix_BpS;
+      ++y;
+      dy--;
+   }
+}
+
+EXTERN void _Draw_UVc_16_16( )
+{
+   INT y, dy;
+   USHORT *Dst;
+
+   y = Scan_Start;
+   Dst = ((USHORT *)_RCst_.Base_Ptr) + (y+1)*(_RCst_.Pix_BpS/2);
+   dy = Scan_H;
+   DyU *= 16.0; DyV *= 16.0; DyiZ *= 16.0;
+   while( dy>0 )   
+   {
+      INT Len, Left_Over;
+      FLT uiz, viz, iz, z;
+      INT U, V;
+      USHORT *Ptr;
+
+      iz  = Scan_iZ[y]; z = 1.0/iz;
+
+      Len = Scan_Pt2[y];
+      Ptr = Dst - Len;
+      Len = Len - Scan_Pt1[y];
+      if ( Len<=0 ) goto Skip;
+      Left_Over = (Len)&0x0F;
+      Len = Len>>4;
+
+      uiz = Scan_UiZ[y]; U = (INT)( uiz*z );
+      viz = Scan_ViZ[y]; V = (INT)( viz*z );
+
+      if ( Len==0 )
+      {
+         uiz -= DyU*_Div_Tab_16_[Left_Over-1];
+         viz -= DyV*_Div_Tab_16_[Left_Over-1];
+         iz  -= DyiZ*_Div_Tab_16_[Left_Over-1];
+         z = 1.0/iz;
+         goto Finish_16;
+      }
+      iz -= DyiZ; uiz -= DyU; viz -= DyV;
+      z = 1.0/iz;
+
+      while( --Len>=0 )
+      {
+         INT Span;
+         INT U2, V2, dU, dV;
+
+         U2 = (INT)( uiz*z ); V2 = (INT)( viz*z );
+         dU = (U2-U)>>4; dV = (V2-V)>>4;
+         if ( Len )
+         {
+            uiz -= DyU; viz -= DyV; iz -= DyiZ;
+            z = 1.0/iz;
+         }
+         else if ( Left_Over )
+         {
+            uiz -= DyU*_Div_Tab_16_[Left_Over-1];
+            viz -= DyV*_Div_Tab_16_[Left_Over-1];
+            iz  -= DyiZ*_Div_Tab_16_[Left_Over-1];
+            z = 1.0/iz;
+         }
+         Span = -16; Ptr -= Span;
+         while( Span<0 )
+         {
+            USHORT Off = ( (U>>16)&0x00FF ) | ( (V>>8)&0xFF00 );
+            Ptr[Span++] = ((USHORT*)UV_Src)[ Off&Mip_Mask ];
+            U += dU; V += dV;
+         }
+         // U = U2; V = V2;
+      }
+
+Finish_16:
+      if ( Left_Over>0 )
+      {
+         INT dU, dV;
+         FLT U2, V2;
+         U2 = uiz*z; V2 = viz*z;
+         dU = (INT)( (U2-(FLT)U)*_Div_Tab_1_[Left_Over] );
+         dV = (INT)( (V2-(FLT)V)*_Div_Tab_1_[Left_Over] );
+         // dV = (V2-V)>>4;
+         while( --Left_Over>=0 )
+         {
+            USHORT Off = ( (U>>16)&0x00FF ) | ( (V>>8)&0xFF00 );
+            *Ptr++ = ((USHORT*)UV_Src)[ Off&Mip_Mask ];
+            U += dU; V += dV;
+         }
+      }
+Skip:
+      (PIXEL*)Dst += _RCst_.Pix_BpS;
+      ++y;
+      dy--;
+   }
+}
+
+EXTERN void _Draw_UVc_8_16( )
+{
+   INT y, dy;
+   USHORT *Dst;
+
+   y = Scan_Start;
+   Dst = ((USHORT *)_RCst_.Base_Ptr) + (y+1)*(_RCst_.Pix_BpS/2);
+   dy = Scan_H;
+   DyU *= 8.0; DyV *= 8.0; DyiZ *= 8.0;
+   while( dy>0 )   
+   {
+      INT Len, Left_Over;
+      FLT uiz, viz, iz, z;
+      INT U, V;
+      USHORT *Ptr;
+
+      iz  = Scan_iZ[y]; z = 1.0/iz;
+
+      Len = Scan_Pt2[y];
+      Ptr = Dst - Len;
+      Len = Len - Scan_Pt1[y];
+      if ( Len<=0 ) goto Skip;
+      Left_Over = (Len)&0x07;
+      Len = Len>>3;
+
+      uiz = Scan_UiZ[y]; U = (INT)( uiz*z );
+      viz = Scan_ViZ[y]; V = (INT)( viz*z );
+
+      if ( Len==0 )
+      {
+         uiz -= DyU*_Div_Tab_8_[Left_Over-1];
+         viz -= DyV*_Div_Tab_8_[Left_Over-1];
+         iz  -= DyiZ*_Div_Tab_8_[Left_Over-1];
+         z = 1.0/iz;
+         goto Finish_8;
+      }
+
+      iz -= DyiZ; uiz -= DyU; viz -= DyV;
+      z = 1.0/iz;
+
+      while( --Len>=0 )
+      {
+         INT Span;
+         INT U2, V2, dU, dV;
+
+         U2 = (INT)( uiz*z ); V2 = (INT)( viz*z );
+         dU = (U2-U)>>3; dV = (V2-V)>>3;
+         if ( Len )
+         {
+            uiz -= DyU; viz -= DyV; iz -= DyiZ;
+            z = 1.0/iz;
+         }
+         else if ( Left_Over )
+         {
+            uiz -= DyU*_Div_Tab_8_[Left_Over-1];
+            viz -= DyV*_Div_Tab_8_[Left_Over-1];
+            iz  -= DyiZ*_Div_Tab_8_[Left_Over-1];
+            z = 1.0/iz;
+         }
+         Span = -8; Ptr -= Span;
+         while( Span<0 )
+         {
+            USHORT Off = ( (U>>16)&0x00FF ) | ( (V>>8)&0xFF00 );
+            Ptr[Span++] = ((USHORT*)UV_Src)[ Off&Mip_Mask ];
+            U += dU; V += dV;
+         }
+         // U = U2; V = V2;
+      }
+Finish_8:
+      if ( Left_Over>0 )
+      {
+         INT dU, dV, U2, V2;
+         U2 = (INT)( uiz*z ); V2 = (INT)( viz*z );
+         dU = (U2-U)>>3; dV = (V2-V)>>3;
+         while( --Left_Over>=0 )
+         {
+            USHORT Off = ( (U>>16)&0x00FF ) | ( (V>>8)&0xFF00 );
+            *Ptr++ = ((USHORT*)UV_Src)[ Off&Mip_Mask ];
+            U += dU; V += dV;
+         }
+      }
+Skip:
+      (BYTE*)Dst += _RCst_.Pix_BpS;
+      ++y;
+      dy--;
+   }
+}
+
+EXTERN void _Draw_UVc_4_16( )
+{
+   INT y, dy;
+   USHORT *Dst;
+   INT Uf, Vf;
+
+   y = Scan_Start;
+   Dst = ((USHORT *)_RCst_.Base_Ptr) + (y+1)*(_RCst_.Pix_BpS/2);
+   dy = Scan_H;
+   DyU *= 4.0; DyV *= 4.0; DyiZ *= 4.0;
+   while( dy>0 )   
+   {
+      INT Len, Left_Over;
+      FLT uiz, viz, iz, z;
+      INT U, V;
+      USHORT *Ptr;
+
+      iz  = Scan_iZ[y]; z = 1.0/iz;
+
+      Len = Scan_Pt2[y];
+      Ptr = Dst - Len;
+      Len = Len - Scan_Pt1[y];
+      if ( Len<=0 ) goto Skip;
+
+      uiz = Scan_UiZ[y]; U = (INT)floor( uiz*z );
+      viz = Scan_ViZ[y]; V = (INT)floor( viz*z );
+
+      z = iz-Len*DyiZ/4.0; z=1.0f/z;
+      Uf = (INT)floor((uiz-Len*DyU/4.0)*z);
+      Vf = (INT)floor((viz-Len*DyV/4.0)*z);
+
+      Left_Over = (Len)&0x03;
+      Len = Len>>2;
+      if ( Len==0 )
+      {
+#if 0
+         uiz -= DyU*_Div_Tab_4_[Left_Over-1];
+         viz -= DyV*_Div_Tab_4_[Left_Over-1];
+         iz  -= DyiZ*_Div_Tab_4_[Left_Over-1];
+         z = 1.0/iz;
+#endif
+         goto Finish_4;
+      }
+
+      iz -= DyiZ; uiz -= DyU; viz -= DyV;
+      z = 1.0/iz;
+
+      while( --Len>=0 )
+      {
+         INT Span;
+         INT U2, V2, dU, dV;
+
+         U2 = (INT)floor( uiz*z ); V2 = (INT)floor( viz*z );
+         dU = (U2-U)>>2; dV = (V2-V)>>2;
+         if ( Len )
+         {
+            uiz -= DyU; viz -= DyV; iz -= DyiZ;
+            z = 1.0/iz;
+         }
+         else if ( Left_Over )
+         {
+            uiz -= DyU*_Div_Tab_4_[Left_Over-1];
+            viz -= DyV*_Div_Tab_4_[Left_Over-1];
+            iz  -= DyiZ*_Div_Tab_4_[Left_Over-1];
+            z = 1.0/iz;
+         }
+         Span = -4; Ptr -= Span;
+         while( Span<0 )
+         {
+            USHORT Off = ( (U>>16)&0x00FF ) | ( (V>>8)&0xFF00 );
+            Ptr[Span++] = ((USHORT*)UV_Src)[ Off&Mip_Mask ];
+            U += dU; V += dV;
+         }
+      }
+
+Finish_4:
+      if ( Left_Over>0 )
+      {
+         INT dU, dV;
+         // INT U2, V2;
+         // U2 = (INT)( uiz*z ); V2 = (INT)( viz*z );
+         dU = (Uf-U)*_Div_Tab_1_[Left_Over];
+         dV = (Vf-V)*_Div_Tab_1_[Left_Over];
+         while( Left_Over-->0 )
+         {
+            USHORT Off = ( (U>>16)&0x00FF ) | ( (V>>8)&0xFF00 );
+            *Ptr++ = ((USHORT*)UV_Src)[ Off&Mip_Mask ];
+            U += dU; V += dV;
+         }
+      }
+Skip:
+      (BYTE*)Dst += _RCst_.Pix_BpS;
+      ++y;
+      dy--;
+   }
+}
+
+EXTERN void _Draw_UVc_2_16( )
+{
+   INT y, dy;
+   USHORT *Dst;
+
+   y = Scan_Start;
+   Dst = ((USHORT *)_RCst_.Base_Ptr) + (y+1)*(_RCst_.Pix_BpS/2);
+   dy = Scan_H;
+   DyU *= 2.0; DyV *= 2.0; DyiZ *= 2.0;
+   while( dy>0 )   
+   {
+      INT Len, Left_Over;
+      FLT uiz, viz, iz, z;
+      INT U, V;
+      USHORT *Ptr;
+
+      iz  = Scan_iZ[y]; z = 1.0/iz;
+
+      Len = Scan_Pt2[y];
+      Ptr = Dst - Len;
+      Len = Len - Scan_Pt1[y];
+      if ( Len<=0 ) goto Skip;
+      Left_Over = (Len)&0x01;
+      Len = Len>>1;
+
+      uiz = Scan_UiZ[y]; U = (INT)( uiz*z );
+      viz = Scan_ViZ[y]; V = (INT)( viz*z );
+      if ( Len==0 )
+      {
+         uiz -= DyU*_Div_Tab_2_[Left_Over-1];
+         viz -= DyV*_Div_Tab_2_[Left_Over-1];
+         iz  -= DyiZ*_Div_Tab_2_[Left_Over-1];
+         z = 1.0/iz;
+         U=(INT)floor(uiz*z); V=(INT)floor(viz*z);
+         goto Finish_2;
+      }
+      iz -= DyiZ; uiz -= DyU; viz -= DyV;
+      z = 1.0/iz;
+
+      while( --Len>=0 )
+      {
+         USHORT Off;
+         INT U2, V2, dU, dV;
+
+         U2 = (INT)( uiz*z ); V2 = (INT)( viz*z );
+         dU = (U2-U)>>1; dV = (V2-V)>>1;
+         if ( Len )
+         {
+            uiz -= DyU; viz -= DyV; iz -= DyiZ;
+            z = 1.0/iz;
+         }
+         else if ( Left_Over )
+         {
+            uiz -= DyU*_Div_Tab_2_[Left_Over-1];
+            viz -= DyV*_Div_Tab_2_[Left_Over-1];
+            iz  -= DyiZ*_Div_Tab_2_[Left_Over-1];
+            z = 1.0/iz;
+         }
+         Off = ( (U>>16)&0x00FF ) | ( (V>>8)&0xFF00 );
+         *Ptr++ = ((USHORT*)UV_Src)[ Off&Mip_Mask ];
+         U += dU; V += dV;
+         Off = ( (U>>16)&0x00FF ) | ( (V>>8)&0xFF00 );
+         *Ptr++ = ((USHORT*)UV_Src)[ Off&Mip_Mask ];
+         // U += dU; V += dV;
+         U = U2; V = V2;
+      }
+
+Finish_2:
+      if ( Left_Over>0 )
+      {
+         USHORT Off = ( (U>>16)&0x00FF ) | ( (V>>8)&0xFF00 );
+         *Ptr = ((USHORT*)UV_Src)[ Off&Mip_Mask ];
+      }
+Skip:
+      (BYTE*)Dst += _RCst_.Pix_BpS;
+      ++y;
+      dy--;
+   }
+}
+
+#endif   // UNIX
+
+/******************************************************************/
+/******************************************************************/

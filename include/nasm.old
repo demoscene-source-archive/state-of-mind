@@ -1,0 +1,161 @@
+   ;
+   ; #defines for NASM
+   ;
+
+%ifdef _DOS_
+;//////////////////////////////////////////////////////////////////////////
+;     DOS macros  (prepends an _ before each global symbols)
+;//////////////////////////////////////////////////////////////////////////
+
+%macro extrn 1
+  extern _%1
+  %define %1 _%1
+%endmacro
+%macro globl 1
+  global _%1
+  %define %1 _%1
+%endmacro
+
+%macro DATA 0
+[section .data align=8 write alloc USE32]
+%endmacro
+%macro TEXT 0
+[section .text align=16 nowrite alloc exec USE32]
+%endmacro
+
+;//////////////////////////////////////////////////////////////////////////
+%endif
+
+%ifndef DOS
+;//////////////////////////////////////////////////////////////////////////
+;           LINUX (or WATCOM) macros
+;//////////////////////////////////////////////////////////////////////////
+
+%macro extrn 1
+  extern %1
+%endmacro
+%macro globl 1
+  global %1
+%endmacro
+
+%macro DATA 0
+[section .data align=8 write alloc USE32]
+%endmacro
+%macro TEXT 0
+[section .text align=16 nowrite alloc exec USE32]
+%endmacro
+
+;//////////////////////////////////////////////////////////////////////////
+%endif
+
+%macro align4 0
+times ($$-$) & 7 nop    ; pad with NOPs to 8-bytes boundary
+%endmacro
+%macro align2 0
+times ($$-$) & 1 nop
+%endmacro
+
+%ifndef __WATCOMC__
+
+%macro Enter 0
+   push ebp
+   push edi
+   push esi
+   push ebx
+%endmacro
+%macro Leave 0
+   pop ebx
+   pop esi
+   pop edi
+   pop ebp
+   ret
+%endmacro
+
+%else
+
+%macro Enter 0
+   push ebp
+   push edi
+   push esi
+   push ebx
+   push eax
+   push ecx
+   push edx
+%endmacro
+%macro Leave 0
+   pop edx
+   pop ecx
+   pop eax
+   pop ebx
+   pop esi
+   pop edi
+   pop ebp
+   ret
+%endmacro
+
+%endif
+
+;//////////////////////////////////////////////////////////////////////////
+
+;	OFFSET des champs dans les structures MESH, BLOB...
+
+%ifndef DOS
+%ifdef __WATCOMC__
+
+%define OFF_VTX		32
+%define OFF_NB_VTX	52
+%define OFF_POLYS	   44
+%define OFF_NB_POLYS	56
+%define OFF_FLAGS    20
+%define OFF_NORMALS	36
+%define OFF_UV		   40
+%define OFF_K		   8
+%define OFF_Gn		   12
+%define OFF_INV_RAD2	172
+%define OFF_RAD		140
+%define OFF_RAD2	   204
+%define OFF_STCK	   32
+%define SIZEOF_POLY  64 
+
+%else	; LNX (GCC)
+
+%define OFF_VTX		32
+%define OFF_NB_VTX	52
+%define OFF_POLYS	   44
+%define OFF_NB_POLYS	56
+%define OFF_FLAGS    20
+%define OFF_NORMALS	36
+%define OFF_UV		   40
+%define OFF_K		   8
+%define OFF_Gn		   12
+%define OFF_INV_RAD2	172
+%define OFF_RAD		140
+%define OFF_RAD2	   204
+%define OFF_STCK	   20
+%define SIZEOF_POLY  64
+
+%endif
+
+
+%else		; DOS ( DJGPP )
+
+%define OFF_VTX		32
+%define OFF_NB_VTX	52
+%define OFF_POLYS	   44
+%define OFF_NB_POLYS	56
+%define OFF_FLAGS    20
+%define OFF_NORMALS	36
+%define OFF_UV		   40
+%define OFF_K		   8
+%define OFF_Gn		   12
+%define OFF_INV_RAD2	172
+%define OFF_RAD		140
+%define OFF_RAD2	   204
+%define OFF_STCK	   20
+%define SIZEOF_POLY  64
+
+%endif
+
+
+;//////////////////////////////////////////////////////////////////////////
+;//////////////////////////////////////////////////////////////////////////
